@@ -24,7 +24,7 @@ TOOLKIT_CMD = "midnight-node-toolkit"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
 BASE_AMOUNT = 1000000
 START_INDEX = 20
-END_INDEX = 35
+END_INDEX = 99
 
 def run_command(cmd, cwd=None):
     """Runs a command and returns stdout if successful, exits otherwise."""

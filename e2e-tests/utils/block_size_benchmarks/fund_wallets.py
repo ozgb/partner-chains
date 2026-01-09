@@ -11,7 +11,7 @@ SRC_URL = "ws://ferdie.node.sc.iog.io:9944"
 DEST_URL = "ws://ferdie.node.sc.iog.io:9944"
 SOURCE_SEED = "0000000000000000000000000000000000000000000000000000000000000001"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
-BASE_AMOUNT = 1000000*10**6
+AMOUNT = 1000000*10**6
 START_INDEX = 40
 END_INDEX = 99
 
@@ -54,14 +54,12 @@ def get_wallet_address(index):
 
 def fund_address(address):
     """Funds the given address using the source seed."""
-    # Randomize amount: BASE_AMOUNT +/- [1, 100]
-    amount = str(BASE_AMOUNT + random.randint(-100, 100))
 
     cmd = [
         TOOLKIT_CMD, "generate-txs", "single-tx",
         "--source-seed", SOURCE_SEED,
         "--src-url", SRC_URL,
-        "--unshielded-amount", amount,
+        "--unshielded-amount", AMOUNT,
         "--unshielded-token-type", TOKEN_TYPE,
         "--destination-address", address,
         "--dest-url", DEST_URL
