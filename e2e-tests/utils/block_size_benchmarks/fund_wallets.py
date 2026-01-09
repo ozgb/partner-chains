@@ -74,11 +74,12 @@ def main():
     print("🚀 Starting wallet creation and funding script...")
     
     new_addresses = []
+    total_wallets = END_INDEX - START_INDEX + 1
     
-    # 1. Create 10 wallets
-    print(f"\n--- Step 1: Generating Wallets (Seeds {START_INDEX}-{END_INDEX}) ---")
+    # 1. Create wallets
+    print(f"\n--- Step 1: Generating {total_wallets} Wallets (Seeds {START_INDEX}-{END_INDEX}) ---")
     for i in range(START_INDEX, END_INDEX + 1):
-        print(f"Generating wallet {i-9}/10 (Seed suffix {i})...", end=" ", flush=True)
+        print(f"Generating wallet {i - START_INDEX + 1}/{total_wallets} (Seed suffix {i})...", end=" ", flush=True)
         addr = get_wallet_address(i)
         new_addresses.append(addr)
         print(f"✅ {addr}")
@@ -86,7 +87,7 @@ def main():
     # 2. Fund the wallets
     print("\n--- Step 2: Funding Wallets ---")
     for i, addr in enumerate(new_addresses, 1):
-        print(f"Funding wallet {i}/10 ({addr})...", end=" ", flush=True)
+        print(f"Funding wallet {i}/{len(new_addresses)} ({addr})...", end=" ", flush=True)
         fund_address(addr)
         print("✅ Sent")
         
