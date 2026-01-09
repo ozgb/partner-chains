@@ -2,6 +2,7 @@
 import subprocess
 import json
 import sys
+import os
 import time
 import concurrent.futures
 import random
@@ -98,7 +99,9 @@ def main():
     start_time = time.time()
     print(f"🚀 Starting ring transaction script ({START_INDEX} -> {START_INDEX+1} -> ... -> {END_INDEX} -> {START_INDEX})...")
    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    max_workers = os.cpu_count() or 1
+    print(f"ℹ️  Using {max_workers} threads for execution.")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_transfer, i, START_INDEX, END_INDEX) for i in range(START_INDEX, END_INDEX + 1)]
         concurrent.futures.wait(futures)
 
