@@ -21,7 +21,6 @@ RELAYS = [
     "tom"
 ]
 TOOLKIT_CMD = "midnight-node-toolkit"
-NODE_URL = "ws://ferdie.node.sc.iog.io:9944"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
 BASE_AMOUNT = 1000000
 START_INDEX = 20
@@ -64,14 +63,18 @@ def send_transaction(source_index, dest_address, amount_val, cwd=None):
     source_seed = f"{source_index:064}"
     amount = str(amount_val)
     
+    # Round-robin selection of relay node
+    relay_name = RELAYS[source_index % len(RELAYS)]
+    node_url = f"ws://{relay_name}.node.sc.iog.io:9944"
+    
     cmd = [
         TOOLKIT_CMD, "generate-txs", "single-tx",
         "--source-seed", source_seed,
-        "--src-url", NODE_URL,
+        "--src-url", node_url,
         "--unshielded-amount", amount,
         "--unshielded-token-type", TOKEN_TYPE,
         "--destination-address", dest_address,
-        "--dest-url", NODE_URL
+        "--dest-url", node_url
     ]
     
     run_command(cmd, cwd=cwd)
