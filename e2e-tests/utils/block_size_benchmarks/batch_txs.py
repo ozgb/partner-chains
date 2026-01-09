@@ -5,6 +5,8 @@ import sys
 def generate_transactions(n_files, toolkit_path="midnight-node-toolkit"):
     """
     Generates n transaction files with increasing amounts.
+    Doesn't work currently because it tries to consume the same UTxO every time.
+    Should be replaced by a tx-in utxo instead of just seed for input.
     """
     
     # Configuration
