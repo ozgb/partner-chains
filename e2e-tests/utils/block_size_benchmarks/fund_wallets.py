@@ -3,6 +3,7 @@ import subprocess
 import json
 import sys
 import time
+import random
 
 # Configuration
 TOOLKIT_CMD = "midnight-node-toolkit"
@@ -10,7 +11,9 @@ SRC_URL = "ws://ferdie.node.sc.iog.io:9944"
 DEST_URL = "ws://ferdie.node.sc.iog.io:9944"
 SOURCE_SEED = "0000000000000000000000000000000000000000000000000000000000000001"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
-AMOUNT = str(1000000*10**6)
+BASE_AMOUNT = 1000000*10**6
+START_INDEX = 40
+END_INDEX = 99
 
 def run_command(cmd):
     """Runs a command and returns stdout if successful, exits otherwise."""
@@ -51,11 +54,14 @@ def get_wallet_address(index):
 
 def fund_address(address):
     """Funds the given address using the source seed."""
+    # Randomize amount: BASE_AMOUNT +/- [1, 100]
+    amount = str(BASE_AMOUNT + random.randint(-100, 100))
+
     cmd = [
         TOOLKIT_CMD, "generate-txs", "single-tx",
         "--source-seed", SOURCE_SEED,
         "--src-url", SRC_URL,
-        "--unshielded-amount", AMOUNT,
+        "--unshielded-amount", amount,
         "--unshielded-token-type", TOKEN_TYPE,
         "--destination-address", address,
         "--dest-url", DEST_URL
@@ -70,8 +76,8 @@ def main():
     new_addresses = []
     
     # 1. Create 10 wallets
-    print("\n--- Step 1: Generating 10 Wallets (Seeds 10-19) ---")
-    for i in range(20, 30):
+    print(f"\n--- Step 1: Generating Wallets (Seeds {START_INDEX}-{END_INDEX}) ---")
+    for i in range(START_INDEX, END_INDEX + 1):
         print(f"Generating wallet {i-9}/10 (Seed suffix {i})...", end=" ", flush=True)
         addr = get_wallet_address(i)
         new_addresses.append(addr)

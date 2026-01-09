@@ -4,8 +4,8 @@ import sys
 
 def register_dust_addresses():
     # Configuration
-    start_index = 20
-    end_index = 29
+    start_index = 40
+    end_index = 99
     
     # Connection details
     node_url = "ws://ferdie.node.sc.iog.io:9944"
