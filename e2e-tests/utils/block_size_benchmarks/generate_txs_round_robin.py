@@ -2,11 +2,12 @@
 import subprocess
 import json
 import sys
+import argparse
 import os
 import time
 import concurrent.futures
 import random
-import tempfile
+import threading
 
 # Configuration
 RELAYS = [
@@ -25,12 +26,22 @@ TOOLKIT_CMD = "midnight-node-toolkit"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
 BASE_AMOUNT = 1000000
 START_INDEX = 20
-END_INDEX = 22
+END_INDEX = 25
 
-def run_command(cmd, cwd=None):
+DB_LOCK = threading.Lock()
+
+def run_command(cmd, cwd=None, verbose=False):
     """Runs a command and returns stdout if successful, exits otherwise."""
+    if verbose:
+        print(f"Running: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=cwd)
+        with DB_LOCK:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=cwd)
+        if verbose:
+            if result.stdout:
+                print(f"STDOUT: {result.stdout.strip()}")
+            if result.stderr:
+                print(f"STDERR: {result.stderr.strip()}")
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Error executing command: {' '.join(cmd)}")
@@ -41,7 +52,7 @@ def run_command(cmd, cwd=None):
         print(f"\n❌ Error: Executable '{cmd[0]}' not found. Ensure it is in your PATH.")
         sys.exit(1)
 
-def get_address_for_seed_index(index, cwd=None):
+def get_address_for_seed_index(index, cwd=None, verbose=False):
     """Derives the address for a given seed index (padded to 64 chars)."""
     seed = f"{index:064}"
     
@@ -51,7 +62,7 @@ def get_address_for_seed_index(index, cwd=None):
         "--seed", seed
     ]
     
-    output = run_command(cmd, cwd=cwd)
+    output = run_command(cmd, cwd=cwd, verbose=verbose)
     try:
         data = json.loads(output)
         return data["unshielded"]
@@ -59,7 +70,7 @@ def get_address_for_seed_index(index, cwd=None):
         print(f"\n❌ Failed to parse address for seed index {index}")
         sys.exit(1)
 
-def send_transaction(source_index, dest_address, amount_val, cwd=None):
+def send_transaction(source_index, dest_address, amount_val, save_to_file=True, cwd=None, verbose=False):
     """Sends a transaction from source seed index to destination address."""
     source_seed = f"{source_index:064}"
     amount = str(amount_val)
@@ -75,12 +86,19 @@ def send_transaction(source_index, dest_address, amount_val, cwd=None):
         "--unshielded-amount", amount,
         "--unshielded-token-type", TOKEN_TYPE,
         "--destination-address", dest_address,
-        "--dest-url", node_url
     ]
     
-    run_command(cmd, cwd=cwd)
+    if save_to_file:
+        timestamp = int(time.time())
+        filename = os.path.join("txs", f"tx_{timestamp}_{source_index}.json")
+        filename = os.path.abspath(filename)
+        cmd.extend(["--dest-file", filename])
+    else:
+        cmd.extend(["--dest-url", node_url])
+    
+    run_command(cmd, cwd=cwd, verbose=verbose)
 
-def process_transfer(i, start_index, end_index):
+def process_transfer(i, start_index, end_index, save_to_file, verbose):
     """Handles the transfer for a single index in the ring."""
     # Calculate target index (circle back to start at the end)
     target_index = i + 1 if i < end_index else start_index
@@ -89,13 +107,23 @@ def process_transfer(i, start_index, end_index):
     amount_val = BASE_AMOUNT + random.randint(-100, 100)
     print(f"Processing: Seed {i} -> Seed {target_index} (Amount: {amount_val})...")
     
-    with tempfile.TemporaryDirectory() as temp_dir:
-        dest_addr = get_address_for_seed_index(target_index, cwd=temp_dir)
-        send_transaction(i, dest_addr, amount_val, cwd=temp_dir)
+    dest_addr = get_address_for_seed_index(target_index, cwd=None, verbose=verbose)
+    send_transaction(i, dest_addr, amount_val, save_to_file=save_to_file, cwd=None, verbose=verbose)
     
-    print(f"✅ Seed {i} -> Seed {target_index} Sent ({amount_val})")
+    action = "Saved" if save_to_file else "Sent"
+    print(f"✅ Seed {i} -> Seed {target_index} {action} ({amount_val})")
 
 def main():
+    parser = argparse.ArgumentParser(description="Generate or submit round-robin transactions.")
+    parser.add_argument("--submit", action="store_true", help="Submit transactions directly instead of saving to file.")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output from toolkit commands.")
+    args = parser.parse_args()
+    save_to_file = not args.submit
+    verbose = args.verbose
+
+    if save_to_file:
+        os.makedirs("txs", exist_ok=True)
+
     start_time = time.time()
     print(f"🚀 Starting ring transaction script ({START_INDEX} -> {START_INDEX+1} -> ... -> {END_INDEX} -> {START_INDEX})...")
    
@@ -103,11 +131,11 @@ def main():
     max_workers = min(os.cpu_count() or 1, num_txs)
     print(f"ℹ️  Using {max_workers} threads for execution.")
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_transfer, i, START_INDEX, END_INDEX) for i in range(START_INDEX, END_INDEX + 1)]
+        futures = [executor.submit(process_transfer, i, START_INDEX, END_INDEX, save_to_file, verbose) for i in range(START_INDEX, END_INDEX + 1)]
         concurrent.futures.wait(futures)
 
     end_time = time.time()
-    print("\n🎉 All transactions sent successfully.")
+    print("\n🎉 All transactions generated or sent successfully.")
     print(f"⏱️ Total execution time: {end_time - start_time:.2f} seconds")
 
 if __name__ == "__main__":
