@@ -7,7 +7,8 @@ import os
 import time
 import concurrent.futures
 import random
-import threading
+import shutil
+import tempfile
 
 # Configuration
 RELAYS = [
@@ -26,17 +27,15 @@ TOOLKIT_CMD = "midnight-node-toolkit"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
 BASE_AMOUNT = 1000000
 START_INDEX = 20
-END_INDEX = 25
-
-DB_LOCK = threading.Lock()
+END_INDEX = 29
+DB_PATH = "toolkit.db"
 
 def run_command(cmd, cwd=None, verbose=False):
     """Runs a command and returns stdout if successful, exits otherwise."""
     if verbose:
         print(f"Running: {' '.join(cmd)}")
     try:
-        with DB_LOCK:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=cwd)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=cwd)
         if verbose:
             if result.stdout:
                 print(f"STDOUT: {result.stdout.strip()}")
@@ -107,11 +106,20 @@ def process_transfer(i, start_index, end_index, save_to_file, verbose):
     amount_val = BASE_AMOUNT + random.randint(-100, 100)
     print(f"Processing: Seed {i} -> Seed {target_index} (Amount: {amount_val})...")
     
-    dest_addr = get_address_for_seed_index(target_index, cwd=None, verbose=verbose)
-    send_transaction(i, dest_addr, amount_val, save_to_file=save_to_file, cwd=None, verbose=verbose)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Copy toolkit.db to temp_dir to avoid locking
+        db_copy_start = time.time()
+        if os.path.exists(DB_PATH):
+            shutil.copy(DB_PATH, os.path.join(temp_dir, "toolkit.db"))
+        db_copy_time = time.time() - db_copy_start
+
+        exec_start = time.time()
+        dest_addr = get_address_for_seed_index(target_index, cwd=temp_dir, verbose=verbose)
+        send_transaction(i, dest_addr, amount_val, save_to_file=save_to_file, cwd=temp_dir, verbose=verbose)
+        exec_time = time.time() - exec_start
     
     action = "Saved" if save_to_file else "Sent"
-    print(f"✅ Seed {i} -> Seed {target_index} {action} ({amount_val})")
+    print(f"✅ Seed {i} -> Seed {target_index} {action} ({amount_val}) [DB Copy: {db_copy_time:.4f}s, Exec: {exec_time:.4f}s]")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate or submit round-robin transactions.")
@@ -120,6 +128,19 @@ def main():
     args = parser.parse_args()
     save_to_file = not args.submit
     verbose = args.verbose
+
+    global DB_PATH
+    if not os.path.exists(DB_PATH):
+        print(f"⚠️  Warning: '{DB_PATH}' not found in current directory.")
+        user_input = input("Please enter the full path to toolkit.db: ").strip()
+        if not user_input:
+            print("❌ No path provided. Exiting.")
+            sys.exit(1)
+        
+        DB_PATH = user_input
+        if not os.path.exists(DB_PATH):
+            print(f"❌ Error: File '{DB_PATH}' not found.")
+            sys.exit(1)
 
     if save_to_file:
         os.makedirs("txs", exist_ok=True)

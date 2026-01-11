@@ -5,7 +5,8 @@ import re
 import sys
 import time
 import concurrent.futures
-import threading
+import shutil
+import tempfile
 
 RELAYS = [
     "ferdie",
@@ -19,37 +20,57 @@ RELAYS = [
     "sam",
     "tom"
 ]
-
-DB_LOCK = threading.Lock()
+DB_PATH = "toolkit.db"
 
 def submit_single_tx(i, tx_file, total_files, toolkit_path):
     relay_name = RELAYS[i % len(RELAYS)]
     dest_url = f"ws://{relay_name}.node.sc.iog.io:9944"
     
+    # Ensure absolute path for the source file since we change CWD
+    abs_tx_file = os.path.abspath(tx_file)
+
     cmd = [
         toolkit_path, "generate-txs", "send",
-        "--src-file", tx_file,
+        "--src-file", abs_tx_file,
         "--dest-url", dest_url
     ]
 
     try:
-        # Run the command
-        with DB_LOCK:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Copy toolkit.db to temp_dir to avoid locking
+            db_copy_start = time.time()
+            if os.path.exists(DB_PATH):
+                shutil.copy(DB_PATH, os.path.join(temp_dir, "toolkit.db"))
+            db_copy_time = time.time() - db_copy_start
+
+            exec_start = time.time()
             result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                check=True
+                cmd, capture_output=True, text=True, check=True, cwd=temp_dir
             )
+            exec_time = time.time() - exec_start
+
         if result.stderr:
             print(f"⚠️  {tx_file}: {result.stderr}")
-        print(f"✅ [{i}/{total_files}] Sent {tx_file} to {relay_name}")
+        print(f"✅ [{i}/{total_files}] Sent {tx_file} to {relay_name} [DB Copy: {db_copy_time:.4f}s, Exec: {exec_time:.4f}s]")
 
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Failed to submit {tx_file} to {relay_name}!")
         print("Error Output:", e.stderr)
 
 def submit_transactions(toolkit_path="midnight-node-toolkit"):
+    global DB_PATH
+    if not os.path.exists(DB_PATH):
+        print(f"⚠️  Warning: '{DB_PATH}' not found in current directory.")
+        user_input = input("Please enter the full path to toolkit.db: ").strip()
+        if not user_input:
+            print("❌ No path provided. Exiting.")
+            sys.exit(1)
+        
+        DB_PATH = user_input
+        if not os.path.exists(DB_PATH):
+            print(f"❌ Error: File '{DB_PATH}' not found.")
+            sys.exit(1)
+
     start_time = time.time()
     # 1. Find all matching files
     files = glob.glob(os.path.join("txs", "tx_*.json"))
