@@ -10,7 +10,18 @@ import concurrent.futures
 
 # Configuration
 TOOLKIT_CMD = "midnight-node-toolkit"
-NODE_URL = "ws://ferdie.node.sc.iog.io:9944"
+RELAYS = [
+    "ferdie",
+    "george",
+    "henry",
+    "iris",
+    "jack",
+    "paul",
+    "quinn",
+    "rita",
+    "sam",
+    "tom"
+]
 START_INDEX = 20
 END_INDEX = 29
 DB_PATH = "toolkit.db"
@@ -19,10 +30,13 @@ def get_balance(index):
     """Gets the balance for a given seed index."""
     seed = f"{index:064}"
     
+    relay_name = RELAYS[index % len(RELAYS)]
+    node_url = f"ws://{relay_name}.node.sc.iog.io:9944"
+    
     cmd = [
         TOOLKIT_CMD, "show-wallet",
         "--seed", seed,
-        "--src-url", NODE_URL
+        "--src-url", node_url
     ]
     
     try:
@@ -90,7 +104,7 @@ def main():
             sys.exit(1)
 
     start_time = time.time()
-    print(f"🚀 Checking balances for seeds {START_INDEX} to {END_INDEX} on {NODE_URL}...")
+    print(f"🚀 Checking balances for seeds {START_INDEX} to {END_INDEX} across {len(RELAYS)} nodes...")
     
     num_seeds = END_INDEX - START_INDEX + 1
     max_workers = min(os.cpu_count() or 1, num_seeds)

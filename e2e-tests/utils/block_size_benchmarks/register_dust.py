@@ -4,7 +4,7 @@ import sys
 
 def register_dust_addresses():
     # Configuration
-    start_index = 40
+    start_index = 10
     end_index = 99
     
     # Connection details
