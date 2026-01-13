@@ -6,10 +6,10 @@ Script calculates block propagation time as a timestamp difference between “Pr
 
 ### Prerequisites
 
-1. Install `python3`, `pip`
+1. Install `uv` (see https://docs.astral.sh/uv/getting-started/installation/)
 2. Install dependencies:
    ```bash
-   pip install pandas requests
+   uv sync
    ```
 3. Install `sops` for encrypted config files:
    ```bash
@@ -43,7 +43,7 @@ Download logs from Loki/Grafana using `download_logs.py` (located in the parent 
 
    **Using encrypted config file (recommended):**
    ```bash
-   python3 ../download_logs.py \
+   uv run ../download_logs.py \
      --config ../../secrets/substrate/performance/performance.json \
      --from-time "2026-01-07T10:00:00Z" \
      --to-time "2026-01-07T10:10:00Z" \
@@ -58,7 +58,7 @@ Download logs from Loki/Grafana using `download_logs.py` (located in the parent 
    
    **Using command-line arguments (alternative):**
    ```bash
-   python3 ../download_logs.py \
+   uv run ../download_logs.py \
      --url "https://tools.node.sc.iog.io/api/datasources/proxy/uid/P8E80F9AEF21F6940" \
      --header "Authorization: Bearer <your_token>" \
      --from-time "2026-01-07T10:00:00Z" \
@@ -81,11 +81,11 @@ Download logs from Loki/Grafana using `download_logs.py` (located in the parent 
 
 4. Extract data from logs:
    ```bash
-   python3 extractor.py alice bob charlie
+   uv run extractor.py alice bob charlie
    ```
    Note: extractor.py expects log files in the current directory. You'll need to navigate to the timestamped log directory (e.g., `logs/YYYY_MM_DD_HH_MM_SS/`) before running the extractor.
 
 5. Generate statistics by node:
    ```bash
-   python3 analyzer.py block_propagation_report.txt analysis.txt alice bob charlie
+   uv run analyzer.py block_propagation_report.txt analysis.txt alice bob charlie
    ```

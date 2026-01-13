@@ -94,9 +94,9 @@ def send_transaction(source_index, dest_address, amount_val, save_to_file=True, 
 
         if save_to_file:
             timestamp = int(time.time())
-            filename = os.path.join("txs", f"tx_{timestamp}_{source_index}.json")
+            filename = os.path.join("txs", f"tx_{timestamp}_{source_index}.mn")
             filename = os.path.abspath(filename)
-            cmd.extend(["--dest-file", filename])
+            cmd.extend(["--to-bytes", "--dest-file", filename])
         else:
             cmd.extend(["--dest-url", node_url])
 
