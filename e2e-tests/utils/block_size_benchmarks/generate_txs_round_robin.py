@@ -27,10 +27,10 @@ TOOLKIT_CMD = "midnight-node-toolkit"
 TOKEN_TYPE = "0000000000000000000000000000000000000000000000000000000000000000"
 BASE_AMOUNT = 1000000
 START_INDEX = 20
-END_INDEX = 29
+END_INDEX = 25
 DB_PATH = "toolkit.db"
 
-def run_command(cmd, cwd=None, verbose=False):
+def run_command(cmd, cwd=None, verbose=False, exit_on_error=True):
     """Runs a command and returns stdout if successful, exits otherwise."""
     if verbose:
         print(f"Running: {' '.join(cmd)}")
@@ -43,6 +43,8 @@ def run_command(cmd, cwd=None, verbose=False):
                 print(f"STDERR: {result.stderr.strip()}")
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
+        if not exit_on_error:
+            raise e
         print(f"\n❌ Error executing command: {' '.join(cmd)}")
         print(f"STDOUT: {e.stdout}")
         print(f"STDERR: {e.stderr}")
@@ -74,28 +76,38 @@ def send_transaction(source_index, dest_address, amount_val, save_to_file=True, 
     source_seed = f"{source_index:064}"
     amount = str(amount_val)
     
-    # Round-robin selection of relay node
-    relay_name = RELAYS[source_index % len(RELAYS)]
-    node_url = f"ws://{relay_name}.node.sc.iog.io:9944"
-    
-    cmd = [
-        TOOLKIT_CMD, "generate-txs", "single-tx",
-        "--source-seed", source_seed,
-        "--src-url", node_url,
-        "--unshielded-amount", amount,
-        "--unshielded-token-type", TOKEN_TYPE,
-        "--destination-address", dest_address,
-    ]
-    
-    if save_to_file:
-        timestamp = int(time.time())
-        filename = os.path.join("txs", f"tx_{timestamp}_{source_index}.json")
-        filename = os.path.abspath(filename)
-        cmd.extend(["--dest-file", filename])
-    else:
-        cmd.extend(["--dest-url", node_url])
-    
-    run_command(cmd, cwd=cwd, verbose=verbose)
+    start_relay_idx = source_index % len(RELAYS)
+
+    for i in range(len(RELAYS)):
+        relay_idx = (start_relay_idx + i) % len(RELAYS)
+        relay_name = RELAYS[relay_idx]
+        node_url = f"ws://{relay_name}.node.sc.iog.io:9944"
+
+        cmd = [
+            TOOLKIT_CMD, "generate-txs", "single-tx",
+            "--source-seed", source_seed,
+            "--src-url", node_url,
+            "--unshielded-amount", amount,
+            "--unshielded-token-type", TOKEN_TYPE,
+            "--destination-address", dest_address,
+        ]
+
+        if save_to_file:
+            timestamp = int(time.time())
+            filename = os.path.join("txs", f"tx_{timestamp}_{source_index}.json")
+            filename = os.path.abspath(filename)
+            cmd.extend(["--dest-file", filename])
+        else:
+            cmd.extend(["--dest-url", node_url])
+
+        try:
+            last_attempt = (i == len(RELAYS) - 1)
+            run_command(cmd, cwd=cwd, verbose=verbose, exit_on_error=last_attempt)
+            if i > 0:
+                print(f"✅ Retry successful on {relay_name}")
+            return
+        except subprocess.CalledProcessError:
+            print(f"⚠️  Failed on {relay_name}, trying next node...")
 
 def process_transfer(i, start_index, end_index, save_to_file, verbose):
     """Handles the transfer for a single index in the ring."""
@@ -125,9 +137,13 @@ def main():
     parser = argparse.ArgumentParser(description="Generate or submit round-robin transactions.")
     parser.add_argument("--submit", action="store_true", help="Submit transactions directly instead of saving to file.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output from toolkit commands.")
+    parser.add_argument("--start", type=int, default=START_INDEX, help="Starting seed to generate txs")
+    parser.add_argument("--end", type=int, default=END_INDEX, help="Ending seed to generate txs")
     args = parser.parse_args()
     save_to_file = not args.submit
     verbose = args.verbose
+    start_index = args.start
+    end_index = args.end
 
     global DB_PATH
     if not os.path.exists(DB_PATH):
@@ -143,16 +159,18 @@ def main():
             sys.exit(1)
 
     if save_to_file:
+        if os.path.exists("txs"):
+            shutil.rmtree("txs")
         os.makedirs("txs", exist_ok=True)
 
     start_time = time.time()
-    print(f"🚀 Starting ring transaction script ({START_INDEX} -> {START_INDEX+1} -> ... -> {END_INDEX} -> {START_INDEX})...")
+    print(f"🚀 Starting ring transaction script ({start_index} -> {start_index+1} -> ... -> {end_index} -> {start_index})...")
    
-    num_txs = END_INDEX - START_INDEX + 1
+    num_txs = end_index - start_index + 1
     max_workers = min(os.cpu_count() or 1, num_txs)
     print(f"ℹ️  Using {max_workers} threads for execution.")
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_transfer, i, START_INDEX, END_INDEX, save_to_file, verbose) for i in range(START_INDEX, END_INDEX + 1)]
+        futures = [executor.submit(process_transfer, i, start_index, end_index, save_to_file, verbose) for i in range(start_index, end_index + 1)]
         concurrent.futures.wait(futures)
 
     end_time = time.time()

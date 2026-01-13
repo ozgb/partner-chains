@@ -23,7 +23,7 @@ RELAYS = [
     "tom"
 ]
 START_INDEX = 20
-END_INDEX = 29
+END_INDEX = 25
 DB_PATH = "toolkit.db"
 
 def get_balance(index):
