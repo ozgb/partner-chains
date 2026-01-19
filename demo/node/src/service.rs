@@ -2,6 +2,7 @@
 
 use crate::data_sources::DataSources;
 use crate::inherent_data::{CreateInherentDataConfig, ProposalCIDP, VerifierCIDP};
+use crate::mc_hash_block_import::McHashVerifyingBlockImport;
 use crate::rpc::GrandpaDeps;
 use authority_selection_inherents::AuthoritySelectionDataSource;
 use partner_chains_db_sync_data_sources::McFollowerMetrics;
@@ -141,7 +142,15 @@ pub fn new_partial(
 	let time_source = Arc::new(SystemTimeSource);
 	let epoch_config = MainchainEpochConfig::read_from_env()
 		.map_err(|err| ServiceError::Application(err.into()))?;
-	let inherent_config = CreateInherentDataConfig::new(epoch_config, sc_slot_config, time_source);
+	let inherent_config = CreateInherentDataConfig::new(epoch_config.clone(), sc_slot_config.clone(), time_source);
+
+	// Wrap grandpa_block_import with McHashVerifyingBlockImport to implement
+	// two-step MC hash verification (existence then stability check)
+	let mc_verifying_block_import = McHashVerifyingBlockImport::new(
+		grandpa_block_import.clone(),
+		data_sources.mc_hash.clone(),
+		sc_slot_config.slot_duration,
+	);
 
 	let import_queue = partner_chains_aura_import_queue::import_queue::<
 		AuraPair,
@@ -152,7 +161,7 @@ pub fn new_partial(
 		_,
 		McHashInherentDigest,
 	>(ImportQueueParams {
-		block_import: grandpa_block_import.clone(),
+		block_import: mc_verifying_block_import,
 		justification_import: Some(Box::new(grandpa_block_import.clone())),
 		client: client.clone(),
 		create_inherent_data_providers: VerifierCIDP::new(
@@ -163,6 +172,7 @@ pub fn new_partial(
 			data_sources.block_participation.clone(),
 			data_sources.governed_map.clone(),
 			data_sources.bridge.clone(),
+			epoch_config,
 		),
 		spawner: &task_manager.spawn_essential_handle(),
 		registry: config.prometheus_registry(),
