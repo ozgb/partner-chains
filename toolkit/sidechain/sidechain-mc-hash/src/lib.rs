@@ -308,6 +308,16 @@ pub trait McHashDataSource {
 		&self,
 		hash: McBlockHash,
 	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>>;
+
+	/// Returns the latest known Cardano block (regardless of stability).
+	/// Used to detect when db-sync is lagging and shouldn't penalize peers.
+	///
+	/// # Returns
+	/// * `Some(block)` - the latest block known to the data source
+	/// * `None` - no blocks available (data source may be unavailable)
+	async fn get_cardano_tip(
+		&self,
+	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 impl McHashInherentDataProvider {
@@ -670,6 +680,13 @@ pub mod mock {
 				.find(|b| b.hash == hash)
 				.cloned()
 				.or_else(|| self.unstable_blocks.iter().find(|b| b.hash == hash).cloned()))
+		}
+
+		async fn get_cardano_tip(
+			&self,
+		) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>> {
+			// Return latest from either unstable or stable blocks
+			Ok(self.unstable_blocks.last().or(self.stable_blocks.last()).cloned())
 		}
 	}
 }

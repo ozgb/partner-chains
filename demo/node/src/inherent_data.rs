@@ -12,7 +12,7 @@ use sc_consensus_aura::{SlotDuration, find_pre_digest};
 use sc_service::Arc;
 use sidechain_domain::{
 	DelegatorKey, McBlockHash, ScEpochNumber,
-	mainchain_epoch::{MainchainEpochConfig, MainchainEpochDerivation},
+	mainchain_epoch::{MainchainEpochConfig, MainchainEpochDerivation, Timestamp as McTimestamp},
 };
 use sidechain_mc_hash::{McHashDataSource, McHashInherentDataProvider as McHashIDP, McHashInherentDigest};
 use sidechain_slots::ScSlotConfig;
@@ -228,7 +228,9 @@ where
 		let slot_timestamp = verified_block_slot
 			.timestamp(config.slot_duration())
 			.ok_or("Slot represents a timestamp bigger than u64::MAX")?;
-		let mc_epoch = mc_epoch_config.timestamp_to_mainchain_epoch(slot_timestamp)?;
+		// Convert sp_timestamp::Timestamp to sidechain_domain::mainchain_epoch::Timestamp
+		let mc_timestamp = McTimestamp::from_unix_millis(slot_timestamp.as_millis());
+		let mc_epoch = mc_epoch_config.timestamp_to_mainchain_epoch(mc_timestamp)?;
 
 		// Extract previous mc_hash from parent header digest (for governed_map IDP)
 		let previous_mc_hash = if parent_header.number().is_zero() {
